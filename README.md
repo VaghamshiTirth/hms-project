@@ -6,7 +6,6 @@ Hospital Management System (HMS) built with:
 - Django backend API
 - Capacitor Android wrapper for APK generation
 
-When someone opens this repository on GitHub, this README gives a quick overview of every dashboard, the main modules, and the Android app flow.
 
 ## Main User Dashboards
 
