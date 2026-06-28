@@ -17,6 +17,27 @@ function panelButtonClasses(isActive) {
     }`;
 }
 
+function isPastSlotForDate(dateValue, slotValue) {
+    if (!dateValue || !slotValue) {
+        return false;
+    }
+
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    if (dateValue !== today) {
+        return false;
+    }
+
+    const [hours, minutes] = String(slotValue).split(":").map(Number);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+        return false;
+    }
+
+    const slotDate = new Date(now);
+    slotDate.setHours(hours, minutes, 0, 0);
+    return slotDate <= now;
+}
+
 function Appointment() {
     const [activePanel, setActivePanel] = useState("book");
     const [patients, setPatients] = useState([]);
@@ -85,7 +106,11 @@ function Appointment() {
         try {
             const response = await API.get(`doctors/${doctorId}/available-slots/`, { params: { date: dateValue } });
             const available = response.data.available_slots || [];
-            setAvailableSlots(preferredTime && !available.includes(preferredTime) ? [preferredTime, ...available] : available);
+            const shouldKeepPreferredTime =
+                preferredTime &&
+                !available.includes(preferredTime) &&
+                !isPastSlotForDate(dateValue, preferredTime);
+            setAvailableSlots(shouldKeepPreferredTime ? [preferredTime, ...available] : available);
             setSlotsMeta(response.data);
         } catch (err) {
             setAvailableSlots([]);
@@ -206,7 +231,7 @@ function Appointment() {
         [doctors]
     );
     return (
-        <div className="min-h-screen bg-[#0b1120]">
+        <div className="dashboard-light min-h-screen bg-[#f6fbff]">
             <Sidebar />
 
             <main className="p-5 md:ml-64 md:p-8">
@@ -436,3 +461,4 @@ function Appointment() {
 }
 
 export default Appointment;
+

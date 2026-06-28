@@ -12,6 +12,9 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ActivityLogs from "./pages/ActivityLogs";
 import PatientSignup from "./pages/PatientSignup";
 import AttendantDashboard from "./pages/AttendantDashboard";
+import AdminIdManager from "./pages/AdminIdManager";
+import DoctorAppointments from "./pages/DoctorAppointments";
+import DoctorAdmissions from "./pages/DoctorAdmissions";
 
 function App() {
   return (
@@ -21,6 +24,7 @@ function App() {
         <Route path="/patient-signup" element={<PatientSignup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin-ids" element={<AdminIdManager />} />
         <Route path="/activity-logs" element={<ActivityLogs />} />
         <Route path="/frontdesk-dashboard" element={<FrontDeskDashboard />} />
         <Route path="/admission-desk" element={<AdmissionDesk />} />
@@ -29,6 +33,8 @@ function App() {
         <Route path="/appointments" element={<Appointment />} />
         <Route path="/billing" element={<Billing />} />
         <Route path="/doctor-dashboard" element={<DoctorDashboard />} />
+        <Route path="/doctor-appointments" element={<DoctorAppointments />} />
+        <Route path="/doctor-admissions" element={<DoctorAdmissions />} />
         <Route path="/patient-dashboard" element={<PatientDashboard />} />
         <Route path="/attendant-dashboard" element={<AttendantDashboard />} />
         <Route path="*" element={<Navigate replace to="/" />} />

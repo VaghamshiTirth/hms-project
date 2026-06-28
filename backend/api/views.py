@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -229,6 +229,30 @@ def _generate_daily_slots():
     return slots
 
 
+def _filter_future_slots_for_date(slots, selected_date):
+    if selected_date != timezone.localdate():
+        return slots
+
+    current_time = timezone.localtime().time()
+    visible_slots = []
+    for slot in slots:
+        parsed_slot = _parse_time(slot)
+        if parsed_slot and parsed_slot > current_time:
+            visible_slots.append(slot)
+    return visible_slots
+
+
+def _is_past_slot_for_date(selected_date, slot_value):
+    if selected_date != timezone.localdate():
+        return False
+
+    parsed_slot = _parse_time(slot_value)
+    if not parsed_slot:
+        return False
+
+    return parsed_slot <= timezone.localtime().time()
+
+
 def _parse_date(value):
     try:
         return datetime.strptime(str(value), "%Y-%m-%d").date()
@@ -333,6 +357,95 @@ def _queue_counts(queryset):
         "checked_in": queryset.filter(queue_status="checked_in").count(),
         "in_consultation": queryset.filter(queue_status="in_consultation").count(),
         "completed": queryset.filter(queue_status="completed").count(),
+    }
+
+
+def _parse_patient_age(raw_value, required=False):
+    if raw_value in (None, ""):
+        if required:
+            return None, "Patient age is required."
+        return 0, None
+
+    try:
+        age_value = int(raw_value)
+    except (TypeError, ValueError):
+        return None, "Please enter a valid patient age."
+
+    if age_value < 0:
+        return None, "Patient age cannot be negative."
+
+    return age_value, None
+
+
+def _admin_delete_blockers(user, current_user=None, doctor_profile=None, patient_profile=None, linked_patient_count=None):
+    blockers = []
+
+    if current_user and user.id == current_user.id:
+        blockers.append("You cannot delete your own admin ID while logged in.")
+
+    if user.role == "admin" and User.objects.filter(role="admin").count() <= 1:
+        blockers.append("At least one admin ID must remain in the system.")
+
+    doctor_profile = doctor_profile or Doctor.objects.filter(user=user).first()
+    patient_profile = patient_profile or Patient.objects.filter(user=user).first()
+    linked_patient_count = linked_patient_count if linked_patient_count is not None else FamilyAccess.objects.filter(attendant_user=user).count()
+
+    if doctor_profile:
+        if Appointment.objects.filter(doctor=doctor_profile, status__iexact="Pending").exists():
+            blockers.append("Doctor ID has pending appointment records.")
+
+    if patient_profile:
+        if Appointment.objects.filter(patient=patient_profile, status__iexact="Pending").exists():
+            blockers.append("Patient ID has pending appointment records.")
+        if Billing.objects.filter(patient=patient_profile, status__iexact="Pending").exists():
+            blockers.append("Patient ID has pending billing records.")
+
+    if user.role == "attendant" and linked_patient_count:
+        blockers.append("Attendant ID is linked to family access records.")
+
+    return blockers
+
+
+def _serialize_admin_account(user, doctor_profiles=None, patient_profiles=None, linked_counts=None, current_user=None):
+    doctor_profile = (doctor_profiles or {}).get(user.id)
+    patient_profile = (patient_profiles or {}).get(user.id)
+    linked_patient_count = (linked_counts or {}).get(user.id)
+
+    if doctor_profile is None:
+        doctor_profile = Doctor.objects.filter(user=user).first()
+    if patient_profile is None:
+        patient_profile = Patient.objects.filter(user=user).first()
+    if linked_patient_count is None:
+        linked_patient_count = FamilyAccess.objects.filter(attendant_user=user).count()
+
+    if user.role in {"patient", "attendant"}:
+        login_identifier = user.mobile_number or user.email or f"User ID {user.id}"
+    else:
+        login_identifier = user.email or user.mobile_number or f"User ID {user.id}"
+
+    delete_blockers = _admin_delete_blockers(
+        user,
+        current_user=current_user,
+        doctor_profile=doctor_profile,
+        patient_profile=patient_profile,
+        linked_patient_count=linked_patient_count,
+    )
+
+    return {
+        "id": user.id,
+        "name": user.name,
+        "role": user.role,
+        "email": user.email,
+        "mobile_number": user.mobile_number,
+        "login_identifier": login_identifier,
+        "specialization": doctor_profile.specialization if doctor_profile else "",
+        "doctor_profile_id": doctor_profile.id if doctor_profile else None,
+        "patient_profile_id": patient_profile.id if patient_profile else None,
+        "patient_age": patient_profile.age if patient_profile else None,
+        "patient_history": patient_profile.history if patient_profile else "",
+        "linked_patients": linked_patient_count,
+        "can_delete": not delete_blockers,
+        "delete_blockers": delete_blockers,
     }
 
 
@@ -665,6 +778,262 @@ def dashboard_summary(request):
             "queue": _queue_counts(today_appointments),
             "prescriptions": Prescription.objects.count(),
             "medical_records": MedicalRecord.objects.count(),
+        }
+    )
+
+
+@api_view(["GET", "POST"])
+def admin_user_accounts(request):
+    current_user, error = _require_role(request, "admin")
+    if error:
+        return error
+
+    if request.method == "GET":
+        query = request.query_params.get("q", "").strip()
+        role_filter = request.query_params.get("role", "").strip().lower()
+
+        queryset = User.objects.all().order_by("role", "name", "id")
+        if query:
+            queryset = queryset.filter(
+                Q(name__icontains=query)
+                | Q(email__icontains=query)
+                | Q(mobile_number__icontains=query)
+            )
+        if role_filter in dict(User.ROLE_CHOICES):
+            queryset = queryset.filter(role=role_filter)
+
+        users = list(queryset)
+        user_ids = [item.id for item in users]
+        doctor_profiles = {item.user_id: item for item in Doctor.objects.filter(user_id__in=user_ids)}
+        patient_profiles = {item.user_id: item for item in Patient.objects.filter(user_id__in=user_ids)}
+        linked_counts = {
+            item["attendant_user"]: item["total"]
+            for item in FamilyAccess.objects.filter(attendant_user_id__in=user_ids)
+            .values("attendant_user")
+            .annotate(total=Count("id"))
+        }
+        return Response(
+            [
+                _serialize_admin_account(
+                    item,
+                    doctor_profiles=doctor_profiles,
+                    patient_profiles=patient_profiles,
+                    linked_counts=linked_counts,
+                    current_user=current_user,
+                )
+                for item in users
+            ]
+        )
+
+    name = request.data.get("name", "").strip()
+    role = request.data.get("role", "").strip().lower()
+    email = request.data.get("email", "").strip() or None
+    raw_mobile_number = request.data.get("mobile_number", "")
+    password = request.data.get("password", "")
+    specialization = request.data.get("specialization", "").strip()
+    patient_history = request.data.get("patient_history", "").strip()
+
+    if not name:
+        return _error("Please enter the user name.")
+    if role not in dict(User.ROLE_CHOICES):
+        return _error("Please choose a valid role.")
+
+    mobile_number = _normalize_mobile(raw_mobile_number) if raw_mobile_number else None
+    if raw_mobile_number and not mobile_number:
+        return _error("Please enter a valid 10-digit mobile number.")
+
+    if email and User.objects.filter(email=email).exists():
+        return _error("This email is already registered.")
+    if mobile_number and User.objects.filter(mobile_number=mobile_number).exists():
+        return _error("This mobile number is already registered.")
+
+    generated_password = None
+    notification = None
+
+    if role in {"admin", "frontdesk", "doctor"}:
+        if not email:
+            return _error("Email is required for this role.")
+        if not password:
+            return _error("Password is required for this role.")
+    else:
+        if not mobile_number:
+            return _error(f"{role.title()} mobile number is required.")
+        if not password:
+            generated_password = _generate_password()
+            password = generated_password
+        if not email:
+            email = _build_placeholder_email(mobile_number)
+
+    if role == "doctor" and not specialization:
+        return _error("Doctor specialization is required.")
+
+    patient_age, age_error = _parse_patient_age(
+        request.data.get("patient_age"),
+        required=role == "patient",
+    )
+    if age_error:
+        return _error(age_error)
+
+    user_record = User.objects.create(
+        name=name,
+        email=email,
+        mobile_number=mobile_number,
+        password=make_password(password),
+        role=role,
+    )
+
+    if role == "doctor":
+        Doctor.objects.create(user=user_record, specialization=specialization)
+    elif role == "patient":
+        Patient.objects.create(
+            user=user_record,
+            age=patient_age,
+            history=patient_history,
+        )
+
+    if user_record.mobile_number and generated_password:
+        notification = _send_account_notification(user_record, generated_password)
+
+    _log_activity(current_user, "admin_create_user_id", "user", user_record.id, f"Role {role}")
+
+    return Response(
+        {
+            "message": "ID created successfully.",
+            "account": _serialize_admin_account(user_record, current_user=current_user),
+            "generated_password": generated_password,
+            "notification": notification,
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "PUT", "DELETE"])
+def admin_user_account_detail(request, user_id):
+    current_user, error = _require_role(request, "admin")
+    if error:
+        return error
+
+    user_record = User.objects.filter(id=user_id).first()
+    if not user_record:
+        return _error("User account not found.", status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        return Response(_serialize_admin_account(user_record, current_user=current_user))
+
+    if request.method == "DELETE":
+        delete_blockers = _admin_delete_blockers(user_record, current_user=current_user)
+        if delete_blockers:
+            return _error("This ID cannot be deleted: " + " ".join(delete_blockers))
+
+        deleted_name = user_record.name
+        deleted_role = user_record.role
+        deleted_id = user_record.id
+        user_record.delete()
+        _log_activity(current_user, "admin_delete_user_id", "user", deleted_id, f"Role {deleted_role} | {deleted_name}")
+        return Response({"message": "ID deleted successfully."})
+
+    incoming_role = request.data.get("role")
+    if incoming_role and str(incoming_role).strip().lower() != user_record.role:
+        return _error("Role cannot be changed here. Please create a new ID for a different role.")
+
+    existing_doctor_profile = Doctor.objects.filter(user=user_record).first()
+    existing_patient_profile = Patient.objects.filter(user=user_record).first()
+    name = request.data.get("name", user_record.name).strip()
+    email = request.data.get("email", user_record.email or "").strip() or None
+    raw_mobile_number = request.data.get("mobile_number", user_record.mobile_number or "")
+    specialization = request.data.get(
+        "specialization",
+        existing_doctor_profile.specialization if existing_doctor_profile else "",
+    ).strip()
+    patient_history = request.data.get(
+        "patient_history",
+        existing_patient_profile.history if existing_patient_profile else "",
+    )
+    new_password = request.data.get("password", "")
+
+    if not name:
+        return _error("Please enter the user name.")
+
+    mobile_number = _normalize_mobile(raw_mobile_number) if raw_mobile_number else None
+    if raw_mobile_number and not mobile_number:
+        return _error("Please enter a valid 10-digit mobile number.")
+
+    if email and User.objects.exclude(id=user_record.id).filter(email=email).exists():
+        return _error("This email is already registered.")
+    if mobile_number and User.objects.exclude(id=user_record.id).filter(mobile_number=mobile_number).exists():
+        return _error("This mobile number is already registered.")
+
+    if user_record.role in {"admin", "frontdesk", "doctor"} and not email:
+        return _error("Email is required for this role.")
+    if user_record.role in {"patient", "attendant"} and not mobile_number:
+        return _error(f"{user_record.role.title()} mobile number is required.")
+    if user_record.role == "doctor" and not specialization:
+        return _error("Doctor specialization is required.")
+
+    patient_age, age_error = _parse_patient_age(
+        request.data.get("patient_age", existing_patient_profile.age if existing_patient_profile else None),
+        required=user_record.role == "patient",
+    )
+    if age_error:
+        return _error(age_error)
+
+    user_record.name = name
+    user_record.email = email
+    user_record.mobile_number = mobile_number
+    update_fields = ["name", "email", "mobile_number"]
+
+    if new_password:
+        user_record.password = make_password(new_password)
+        update_fields.append("password")
+
+    if user_record.role in {"patient", "attendant"} and not user_record.email and mobile_number:
+        user_record.email = _build_placeholder_email(mobile_number)
+        if "email" not in update_fields:
+            update_fields.append("email")
+
+    user_record.save(update_fields=update_fields)
+
+    if user_record.role == "doctor":
+        doctor_profile, _ = Doctor.objects.get_or_create(user=user_record, defaults={"specialization": specialization})
+        doctor_profile.specialization = specialization
+        doctor_profile.save(update_fields=["specialization"])
+    elif user_record.role == "patient":
+        patient_profile, _ = Patient.objects.get_or_create(
+            user=user_record,
+            defaults={"age": patient_age, "history": patient_history},
+        )
+        patient_profile.age = patient_age
+        patient_profile.history = patient_history
+        patient_profile.save(update_fields=["age", "history"])
+
+    _log_activity(current_user, "admin_update_user_id", "user", user_record.id, f"Role {user_record.role}")
+    return Response({"message": "ID updated successfully.", "account": _serialize_admin_account(user_record, current_user=current_user)})
+
+
+@api_view(["POST"])
+def admin_user_account_reset_password(request, user_id):
+    current_user, error = _require_role(request, "admin")
+    if error:
+        return error
+
+    user_record = User.objects.filter(id=user_id).first()
+    if not user_record:
+        return _error("User account not found.", status.HTTP_404_NOT_FOUND)
+
+    generated_password = _generate_password()
+    user_record.password = make_password(generated_password)
+    user_record.save(update_fields=["password"])
+
+    notification = None
+    if user_record.mobile_number:
+        notification = _send_account_notification(user_record, generated_password)
+
+    _log_activity(current_user, "admin_reset_user_password", "user", user_record.id, f"Role {user_record.role}")
+    return Response(
+        {
+            "message": "Temporary password generated.",
+            "generated_password": generated_password,
+            "notification": notification,
         }
     )
 
@@ -1048,18 +1417,19 @@ def doctor_available_slots(request, doctor_id):
         return _error("Please select today or a future date.")
 
     all_slots = _generate_daily_slots()
+    visible_slots = _filter_future_slots_for_date(all_slots, selected_date)
     booked_slots = {
         appointment.time_slot.strftime("%H:%M")
         for appointment in Appointment.objects.filter(doctor=doctor, date=selected_date).exclude(time_slot__isnull=True)
     }
-    available_slots = [slot for slot in all_slots if slot not in booked_slots]
+    available_slots = [slot for slot in visible_slots if slot not in booked_slots]
 
     return Response(
         {
             "doctor": DoctorSerializer(doctor).data,
             "date": selected_date.isoformat(),
             "slot_interval_minutes": _slot_interval_minutes(),
-            "slots": all_slots,
+            "slots": visible_slots,
             "booked_slots": sorted(booked_slots),
             "available_slots": available_slots,
         }
@@ -1117,7 +1487,10 @@ def appointments(request):
     if not time_slot:
         return _error("Please choose an appointment time.")
 
-    if str(date_value) < str(timezone.localdate()):
+    parsed_date_value = _parse_date(date_value)
+    if not parsed_date_value:
+        return _error("Please choose a valid appointment date.")
+    if parsed_date_value < timezone.localdate():
         return _error("Appointment date cannot be in the past.")
 
     if user.role == "patient":
@@ -1140,8 +1513,10 @@ def appointments(request):
 
     if normalized_time_slot not in _generate_daily_slots():
         return _error("Please select a time from the doctor schedule.")
+    if _is_past_slot_for_date(parsed_date_value, normalized_time_slot):
+        return _error("Please select a future time slot.")
 
-    if doctor_id and date_value and normalized_time_slot and Appointment.objects.filter(doctor_id=doctor_id, date=date_value, time_slot=normalized_time_slot).exists():
+    if doctor_id and parsed_date_value and normalized_time_slot and Appointment.objects.filter(doctor_id=doctor_id, date=parsed_date_value, time_slot=normalized_time_slot).exists():
         return _error("This doctor time slot is already booked.")
 
     serializer = AppointmentSerializer(data=payload)
@@ -1197,6 +1572,8 @@ def appointment_detail(request, appointment_id):
                 return _error("Please choose a valid appointment time.")
             if requested_time_slot not in _generate_daily_slots():
                 return _error("Please select a time from the doctor schedule.")
+            if _is_past_slot_for_date(parsed_date, requested_time_slot):
+                return _error("Please select a future time slot.")
 
             conflicting_appointment = Appointment.objects.filter(
                 doctor_id=requested_doctor_id,
@@ -1219,6 +1596,34 @@ def appointment_detail(request, appointment_id):
             status_value = payload.get("status")
             if queue_status in {"checked_in", "in_consultation", "completed"} or status_value == "Completed":
                 payload["is_no_show"] = False
+
+            if any(field in payload for field in ["date", "time_slot", "doctor"]):
+                requested_date = payload.get("date", appointment.date.isoformat())
+                parsed_date = _parse_date(requested_date)
+                if not parsed_date:
+                    return _error("Please choose a valid appointment date.")
+                if parsed_date < timezone.localdate():
+                    return _error("Appointment date cannot be in the past.")
+
+                requested_time_slot = _normalize_appointment_time_slot(payload.get("time_slot", appointment.time_slot))
+                if not requested_time_slot:
+                    return _error("Please choose a valid appointment time.")
+                if requested_time_slot not in _generate_daily_slots():
+                    return _error("Please select a time from the doctor schedule.")
+                if _is_past_slot_for_date(parsed_date, requested_time_slot):
+                    return _error("Please select a future time slot.")
+
+                requested_doctor_id = payload.get("doctor", appointment.doctor_id)
+                conflicting_appointment = Appointment.objects.filter(
+                    doctor_id=requested_doctor_id,
+                    date=parsed_date,
+                    time_slot=requested_time_slot,
+                ).exclude(id=appointment.id).exists()
+                if conflicting_appointment:
+                    return _error("This doctor time slot is already booked.")
+
+                payload["date"] = parsed_date.isoformat()
+                payload["time_slot"] = requested_time_slot
 
         serializer = AppointmentSerializer(appointment, data=payload, partial=True)
         if serializer.is_valid():
@@ -1273,6 +1678,8 @@ def billing(request):
         return _error("Selected patient does not match the appointment.")
     if Billing.objects.filter(appointment=appointment).exists():
         return _error("Bill already exists for this appointment.")
+    if Billing.objects.filter(patient_id=appointment.patient_id).exists():
+        return _error("Bill already exists for this patient.")
 
     payload["invoice_number"] = _invoice_number()
     serializer = BillingSerializer(data=payload)

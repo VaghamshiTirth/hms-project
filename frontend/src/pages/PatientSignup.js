@@ -67,82 +67,200 @@ function PatientSignup() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-[#0b1120] px-4 py-8">
-            <div className="grid w-full max-w-6xl overflow-hidden rounded-[28px] border border-slate-800 bg-[#101827] shadow-[0_45px_120px_-55px_rgba(15,23,42,0.95)] md:grid-cols-[1.08fr_0.92fr]">
-                <div className="hidden border-r border-slate-800 bg-[#0f172a] p-8 text-white md:block">
-                    <p className="text-sm uppercase tracking-[0.35em] text-slate-300">Patient Self Registration</p>
-                    <h1 className="mt-6 max-w-lg text-4xl font-black leading-tight">Create your hospital portal account</h1>
-                    <div className="mt-8 space-y-3">
-                        <div className="rounded-2xl border border-slate-800 bg-[#111c2d] px-4 py-3">
-                            <p className="text-xs uppercase tracking-[0.28em] text-slate-300">1. Fill your personal details</p>
+        <div className="min-h-screen bg-[#f6fbff] text-slate-900">
+            <div className="relative overflow-hidden bg-[linear-gradient(135deg,#eff8ff_0%,#ffffff_42%,#eefaf5_100%)] px-4 py-8 sm:px-6 lg:px-8">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.16),transparent_34%),radial-gradient(circle_at_right,rgba(16,185,129,0.14),transparent_28%)]" />
+
+                <div className="relative mx-auto max-w-6xl">
+                    <div className="mb-6 flex items-center justify-between gap-4">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.36em] text-emerald-600">Hospital Care</p>
+                            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900">HMS Portal</h1>
                         </div>
-                        <div className="rounded-2xl border border-slate-800 bg-[#111c2d] px-4 py-3">
-                            <p className="text-xs uppercase tracking-[0.28em] text-slate-300">2. Get OTP on mobile</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-800 bg-[#111c2d] px-4 py-3">
-                            <p className="text-xs uppercase tracking-[0.28em] text-slate-300">3. Verify and start booking</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-[#111827] p-6 text-white sm:p-8">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-200">
-                        <span className="h-2 w-2 rounded-full bg-cyan-300" />
-                        Patient Signup
-                    </div>
-                    <h2 className="mt-5 text-3xl font-bold text-white">{step === 1 ? "Register with OTP" : "Verify OTP"}</h2>
-                    <p className="mt-2 text-sm text-slate-400">Use your mobile number to create your patient portal account.</p>
-
-                    {step === 1 ? (
-                        <form onSubmit={handleRequestOtp} className="mt-6 grid gap-3">
-                            <input className="w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" type="text" placeholder="Full name" value={form.name} onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))} required />
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <input className="w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" type="text" placeholder="Mobile number" value={form.mobile_number} onChange={(e) => setForm((current) => ({ ...current, mobile_number: e.target.value }))} required />
-                                <input className="w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" type="email" placeholder="Email (optional)" value={form.email} onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))} />
-                            </div>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <input className="w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" type="password" placeholder="Password" value={form.password} onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))} required />
-                                <input className="w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" type="number" min="1" placeholder="Age" value={form.age} onChange={(e) => setForm((current) => ({ ...current, age: e.target.value }))} required />
-                            </div>
-                            <textarea className="min-h-28 w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" placeholder="Medical history" value={form.history} onChange={(e) => setForm((current) => ({ ...current, history: e.target.value }))} />
-
-                            {error && <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>}
-                            {message && <p className="rounded-xl border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{message}</p>}
-
-                            <button type="submit" disabled={isLoading} className="mt-2 w-full rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-slate-200">
-                                {isLoading ? "Sending OTP..." : "Send Signup OTP"}
-                            </button>
-                        </form>
-                    ) : (
-                        <form onSubmit={handleVerifyOtp} className="mt-6 space-y-3">
-                            <input className="w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" type="text" placeholder="Mobile number" value={form.mobile_number} onChange={(e) => setForm((current) => ({ ...current, mobile_number: e.target.value }))} required />
-                            <input className="w-full rounded-xl border border-white/10 bg-[#0f1b31] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 focus:bg-[#12213a]" type="text" placeholder="OTP" value={otp} onChange={(e) => setOtp(e.target.value)} required />
-
-                            {error && <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>}
-                            {message && <p className="rounded-xl border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{message}</p>}
-
-                            <button type="submit" disabled={isLoading} className="w-full rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white disabled:cursor-not-allowed disabled:bg-slate-500 disabled:text-slate-200">
-                                {isLoading ? "Verifying..." : "Verify OTP"}
-                            </button>
-                        </form>
-                    )}
-
-                    <div className="mt-5 flex items-center justify-between gap-4 text-sm text-slate-400">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setStep(1);
-                                setOtp("");
-                                setError("");
-                                setMessage("");
-                            }}
-                            className="font-semibold text-slate-300 transition hover:text-white"
+                        <Link
+                            to="/"
+                            className="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
                         >
-                            Start again
-                        </button>
-                        <Link to="/" className="font-semibold text-slate-300 transition hover:text-white">
-                            Back to login
+                            Back
                         </Link>
+                    </div>
+
+                    <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_45px_120px_-45px_rgba(15,23,42,0.25)]">
+                        <div className="grid lg:grid-cols-[0.95fr_1.05fr]">
+                            <div className="border-b border-slate-200 bg-[linear-gradient(160deg,#f8fdff_0%,#eef7ff_52%,#eefaf5_100%)] p-6 sm:p-8 lg:border-b-0 lg:border-r">
+                                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-700 shadow-sm">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                    Patient Signup
+                                </div>
+                                <h2 className="mt-6 max-w-lg text-4xl font-black leading-tight text-slate-950">
+                                    Create your hospital portal account
+                                </h2>
+                                <p className="mt-4 max-w-xl text-base leading-8 text-slate-600">
+                                    Complete the quick registration flow to receive an OTP and activate your patient account.
+                                </p>
+
+                                <div className="mt-8 grid gap-3">
+                                    <div className={`rounded-[22px] border px-5 py-4 ${step === 1 ? "border-emerald-200 bg-white shadow-sm" : "border-slate-200 bg-slate-50"}`}>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Step 1</p>
+                                        <p className="mt-2 text-lg font-bold text-slate-950">Enter personal details</p>
+                                        <p className="mt-1 text-sm leading-6 text-slate-600">Add your basic information, contact details, age, and password.</p>
+                                    </div>
+                                    <div className={`rounded-[22px] border px-5 py-4 ${step === 2 ? "border-emerald-200 bg-white shadow-sm" : "border-slate-200 bg-slate-50"}`}>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Step 2</p>
+                                        <p className="mt-2 text-lg font-bold text-slate-950">Verify mobile OTP</p>
+                                        <p className="mt-1 text-sm leading-6 text-slate-600">Use the code sent to your mobile number to finish signup securely.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-6 sm:p-8">
+                                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-emerald-700">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                    {step === 1 ? "Register" : "Verify OTP"}
+                                </div>
+                                <p className="mt-5 text-sm font-semibold uppercase tracking-[0.3em] text-slate-400">
+                                    {step === 1 ? "New Patient Access" : "Final Confirmation"}
+                                </p>
+                                <h3 className="mt-3 text-3xl font-bold text-slate-950 sm:text-4xl">
+                                    {step === 1 ? "Register with OTP" : "Confirm your mobile code"}
+                                </h3>
+                                <p className="mt-2 text-sm leading-7 text-slate-600">
+                                    {step === 1
+                                        ? "Use your mobile number to create your patient portal account."
+                                        : "Enter the OTP sent to your mobile number to activate your patient account."}
+                                </p>
+
+                                {step === 1 ? (
+                                    <form onSubmit={handleRequestOtp} className="mt-8 space-y-3" autoComplete="off">
+                                        <input
+                                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                            type="text"
+                                            name="patient_name"
+                                            autoComplete="off"
+                                            placeholder="Full name"
+                                            value={form.name}
+                                            onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
+                                            required
+                                        />
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <input
+                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                                type="text"
+                                                name="patient_mobile"
+                                                autoComplete="off"
+                                                placeholder="Mobile number"
+                                                value={form.mobile_number}
+                                                onChange={(e) => setForm((current) => ({ ...current, mobile_number: e.target.value }))}
+                                                required
+                                            />
+                                            <input
+                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                                type="email"
+                                                name="patient_email"
+                                                autoComplete="off"
+                                                placeholder="Email (optional)"
+                                                value={form.email}
+                                                onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <input
+                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                                type="password"
+                                                name="patient_password"
+                                                autoComplete="new-password"
+                                                placeholder="Password"
+                                                value={form.password}
+                                                onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))}
+                                                required
+                                            />
+                                            <input
+                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                                type="number"
+                                                name="patient_age"
+                                                autoComplete="off"
+                                                min="1"
+                                                placeholder="Age"
+                                                value={form.age}
+                                                onChange={(e) => setForm((current) => ({ ...current, age: e.target.value }))}
+                                                required
+                                            />
+                                        </div>
+                                        <textarea
+                                            className="min-h-32 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                            name="patient_history"
+                                            autoComplete="off"
+                                            placeholder="Medical history"
+                                            value={form.history}
+                                            onChange={(e) => setForm((current) => ({ ...current, history: e.target.value }))}
+                                        />
+
+                                        {error && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
+                                        {message && <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</p>}
+
+                                        <button
+                                            type="submit"
+                                            disabled={isLoading}
+                                            className="mt-2 w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+                                        >
+                                            {isLoading ? "Sending OTP..." : "Send Signup OTP"}
+                                        </button>
+                                    </form>
+                                ) : (
+                                    <form onSubmit={handleVerifyOtp} className="mt-8 space-y-3" autoComplete="off">
+                                        <input
+                                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                            type="text"
+                                            name="verify_mobile"
+                                            autoComplete="off"
+                                            placeholder="Mobile number"
+                                            value={form.mobile_number}
+                                            onChange={(e) => setForm((current) => ({ ...current, mobile_number: e.target.value }))}
+                                            required
+                                        />
+                                        <input
+                                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"
+                                            type="text"
+                                            name="verify_otp"
+                                            autoComplete="one-time-code"
+                                            placeholder="OTP"
+                                            value={otp}
+                                            onChange={(e) => setOtp(e.target.value)}
+                                            required
+                                        />
+
+                                        {error && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
+                                        {message && <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</p>}
+
+                                        <button
+                                            type="submit"
+                                            disabled={isLoading}
+                                            className="w-full rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+                                        >
+                                            {isLoading ? "Verifying..." : "Verify OTP"}
+                                        </button>
+                                    </form>
+                                )}
+
+                                <div className="mt-5 flex items-center justify-between gap-4 text-sm">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setStep(1);
+                                            setOtp("");
+                                            setError("");
+                                            setMessage("");
+                                        }}
+                                        className="font-semibold text-slate-700 transition hover:text-slate-950"
+                                    >
+                                        Start again
+                                    </button>
+                                    <Link to="/" className="font-semibold text-slate-700 transition hover:text-slate-950">
+                                        Back
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

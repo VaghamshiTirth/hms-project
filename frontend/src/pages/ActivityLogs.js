@@ -106,7 +106,7 @@ function ActivityLogs() {
     };
 
     return (
-        <div className="min-h-screen bg-[#0b1120]">
+        <div className="dashboard-light min-h-screen bg-[#f6fbff]">
             <Sidebar />
 
             <main className="min-h-screen p-6 md:ml-64 md:p-8">
@@ -178,3 +178,4 @@ function ActivityLogs() {
 }
 
 export default ActivityLogs;
+

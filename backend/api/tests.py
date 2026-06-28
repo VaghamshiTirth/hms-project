@@ -300,7 +300,7 @@ class BillingAppointmentRuleTests(TestCase):
         self.assertEqual(second_response.status_code, 400)
         self.assertEqual(second_response.json()["error"], "Bill already exists for this appointment.")
 
-    def test_same_patient_second_appointment_can_be_billed(self):
+    def test_same_patient_second_appointment_cannot_be_billed(self):
         first_response = self.client.post(
             "/api/billing/",
             {
@@ -325,7 +325,8 @@ class BillingAppointmentRuleTests(TestCase):
         )
 
         self.assertEqual(first_response.status_code, 201)
-        self.assertEqual(second_response.status_code, 201)
+        self.assertEqual(second_response.status_code, 400)
+        self.assertEqual(second_response.json()["error"], "Bill already exists for this patient.")
 
 
 class PatientPermanentDeleteTests(TestCase):

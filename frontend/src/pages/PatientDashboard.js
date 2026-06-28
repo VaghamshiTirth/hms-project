@@ -205,7 +205,7 @@ function PatientDashboard() {
         window.open(buildApiUrl(`billing/${billId}/invoice/?user_id=${userId}`), "_blank", "noopener,noreferrer");
     };
 
-    if (!dashboard) return <div className="min-h-screen bg-[#0b1120] px-4 py-10">{error && <p className="mx-auto max-w-6xl rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>}</div>;
+    if (!dashboard) return <div className="dashboard-light min-h-screen bg-[#f6fbff] px-4 py-10">{error && <p className="mx-auto max-w-6xl rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>}</div>;
 
     const totalBillingAmount = dashboard.billing.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
     const upcomingAppointment = [...dashboard.appointments]
@@ -231,7 +231,7 @@ function PatientDashboard() {
     ];
 
     return (
-        <div className="min-h-screen bg-[#0b1120] px-4 py-10">
+        <div className="dashboard-light min-h-screen bg-[#f6fbff] px-4 py-10">
             <div className="mx-auto max-w-6xl">
                 <section className="overflow-hidden rounded-[34px] border border-slate-800 bg-[#111827] shadow-[0_36px_80px_-45px_rgba(15,23,42,0.55)]">
                     <div className="grid gap-8 px-7 py-7 lg:grid-cols-[1.12fr_0.88fr] lg:px-8">
@@ -576,3 +576,4 @@ function PatientDashboard() {
 }
 
 export default PatientDashboard;
+

@@ -1,5 +1,8 @@
 from django.urls import path
 from .views import (
+    admin_user_account_detail,
+    admin_user_account_reset_password,
+    admin_user_accounts,
     activity_logs,
     admission_detail,
     admissions,
@@ -46,6 +49,9 @@ urlpatterns = [
     path("summary/", dashboard_summary),
     path("queue-summary/", queue_summary),
     path("activity-logs/", activity_logs),
+    path("admin-user-accounts/", admin_user_accounts),
+    path("admin-user-accounts/<int:user_id>/", admin_user_account_detail),
+    path("admin-user-accounts/<int:user_id>/reset-password/", admin_user_account_reset_password),
     path("patient-users/", patient_users),
     path("attendant-users/", attendant_users),
     path("attendant-family-members/", attendant_family_members),

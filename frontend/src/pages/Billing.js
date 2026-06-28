@@ -127,19 +127,20 @@ function Billing() {
         [appointments]
     );
     const billedAppointmentIds = useMemo(() => new Set(allBills.map((bill) => String(bill.appointment)).filter(Boolean)), [allBills]);
+    const billedPatientIds = useMemo(() => new Set(allBills.map((bill) => String(bill.patient)).filter(Boolean)), [allBills]);
     const billableAppointments = useMemo(
         () =>
             billReadyAppointments
-                .filter((appointment) => !billedAppointmentIds.has(String(appointment.id)))
+                .filter((appointment) => !billedAppointmentIds.has(String(appointment.id)) && !billedPatientIds.has(String(appointment.patient)))
                 .map((appointment) => ({
                     value: String(appointment.id),
                     patientId: String(appointment.patient),
                     label: `${appointment.patient_name} | ${appointment.date} ${appointment.time_slot || ""}`.trim(),
                 })),
-        [billReadyAppointments, billedAppointmentIds]
+        [billReadyAppointments, billedAppointmentIds, billedPatientIds]
     );
     return (
-        <div className="min-h-screen bg-[#0b1120]">
+        <div className="dashboard-light min-h-screen bg-[#f6fbff]">
             <Sidebar />
 
             <main className="p-5 md:ml-64 md:p-8">
@@ -189,7 +190,7 @@ function Billing() {
                                             required
                                             disabled={editingBillId}
                                         >
-                                            <option value="">{editingBillId ? "Appointment locked for edit" : billableAppointments.length ? "Select appointment" : "No new appointment available for billing"}</option>
+                                            <option value="">{editingBillId ? "Appointment locked for edit" : billableAppointments.length ? "Select appointment" : "No patient available for billing"}</option>
                                             {billableAppointments.map((appointment) => <option key={appointment.value} value={appointment.value}>{appointment.label}</option>)}
                                         </select>
                                         <select className="w-full rounded-xl border border-white/10 bg-[#091a2b] px-4 py-3 text-white outline-none transition focus:border-slate-500 focus:bg-[#0d2235]" value={form.patient} onChange={(e) => setForm((current) => ({ ...current, patient: e.target.value }))} required disabled>
@@ -272,3 +273,4 @@ function Billing() {
 }
 
 export default Billing;
+
