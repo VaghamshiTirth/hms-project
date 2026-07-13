@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from .models import Appointment, Doctor, FamilyAccess, Patient, PatientSignupOTP, User
+from .models import Appointment, Doctor, Patient, PatientSignupOTP, User
 
 
 class RoutingSmokeTests(TestCase):
@@ -357,92 +357,4 @@ class PatientPermanentDeleteTests(TestCase):
         self.assertFalse(User.objects.filter(id=self.patient_user.id).exists())
 
 
-class FamilyAccessTests(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.frontdesk_user = User.objects.create(
-            name="Front Desk",
-            email="familydesk@example.com",
-            mobile_number="9555555555",
-            password="secret",
-            role="frontdesk",
-        )
-        self.attendant_user = User.objects.create(
-            name="Parent User",
-            email="parent@example.com",
-            mobile_number="9666666666",
-            password="secret",
-            role="attendant",
-        )
-        patient_user = User.objects.create(
-            name="Child Patient",
-            email="child@example.com",
-            mobile_number="9777777777",
-            password="secret",
-            role="patient",
-        )
-        self.patient = Patient.objects.create(user=patient_user, age=12, history="Checkups")
-        self.client.credentials(HTTP_X_USER_ID=str(self.frontdesk_user.id))
 
-    def test_frontdesk_can_create_family_access(self):
-        response = self.client.post(
-            "/api/family-access/",
-            {
-                "attendant_user": self.attendant_user.id,
-                "patient": self.patient.id,
-                "relation": "Father",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 201)
-        self.assertTrue(FamilyAccess.objects.filter(attendant_user=self.attendant_user, patient=self.patient).exists())
-
-    def test_attendant_can_create_family_member_without_mobile(self):
-        self.client.credentials(HTTP_X_USER_ID=str(self.attendant_user.id))
-
-        response = self.client.post(
-            "/api/attendant-family-members/",
-            {
-                "name": "Second Child",
-                "age": 8,
-                "history": "Seasonal cold",
-                "relation": "daughter",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 201)
-        created_patient = Patient.objects.select_related("user").get(id=response.json()["patient_id"])
-        self.assertEqual(created_patient.user.role, "patient")
-        self.assertIsNone(created_patient.user.mobile_number)
-        self.assertTrue(response.json()["uses_family_account"])
-        self.assertEqual(response.json()["shared_mobile_number"], self.attendant_user.mobile_number)
-        self.assertTrue(FamilyAccess.objects.filter(attendant_user=self.attendant_user, patient=created_patient, relation="daughter").exists())
-
-    def test_frontdesk_patient_list_includes_attendant_as_patient_profile(self):
-        response = self.client.get("/api/patients/")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(Patient.objects.filter(user=self.attendant_user).exists())
-        response_names = [item["user_name"] for item in response.json()]
-        self.assertIn(self.attendant_user.name, response_names)
-
-    def test_patient_can_grant_family_access_after_registration(self):
-        self.client.credentials(HTTP_X_USER_ID=str(self.patient.user_id))
-
-        response = self.client.post(
-            "/api/family-access/",
-            {
-                "attendant_name": "Mother User",
-                "mobile_number": "9888888888",
-                "relation": "mother",
-            },
-            format="json",
-        )
-
-        self.assertEqual(response.status_code, 201)
-        self.assertIn("generated_password", response.json())
-        created_attendant = User.objects.get(mobile_number="9888888888")
-        self.assertEqual(created_attendant.role, "attendant")
-        self.assertTrue(FamilyAccess.objects.filter(attendant_user=created_attendant, patient=self.patient, relation="mother").exists())

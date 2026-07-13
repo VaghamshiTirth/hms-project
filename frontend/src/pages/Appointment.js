@@ -11,12 +11,6 @@ function getStatusTone(status) {
     return "border border-amber-300/15 bg-amber-300/10 text-amber-200";
 }
 
-function panelButtonClasses(isActive) {
-    return `rounded-2xl border px-4 py-4 text-left transition ${
-        isActive ? "border-slate-600 bg-[#182131] text-white" : "border-slate-800 bg-[#111827] text-slate-300 hover:border-slate-700 hover:bg-[#162033]"
-    }`;
-}
-
 function isPastSlotForDate(dateValue, slotValue) {
     if (!dateValue || !slotValue) {
         return false;
@@ -110,7 +104,8 @@ function Appointment() {
                 preferredTime &&
                 !available.includes(preferredTime) &&
                 !isPastSlotForDate(dateValue, preferredTime);
-            setAvailableSlots(shouldKeepPreferredTime ? [preferredTime, ...available] : available);
+            const futureSlots = available.filter((slot) => !isPastSlotForDate(dateValue, slot));
+            setAvailableSlots(shouldKeepPreferredTime && !isPastSlotForDate(dateValue, preferredTime) ? [preferredTime, ...futureSlots] : futureSlots);
             setSlotsMeta(response.data);
         } catch (err) {
             setAvailableSlots([]);
@@ -130,6 +125,42 @@ function Appointment() {
 
         loadAvailableSlots(form.doctor, form.date, form.time_slot);
     }, [form.date, form.doctor, form.time_slot]);
+
+    const [records, setRecords] = useState([]);
+    const [recordForm, setRecordForm] = useState({ patient: "", title: "", record_file: null });
+    const [recordMessage, setRecordMessage] = useState("");
+    const [recordError, setRecordError] = useState("");
+
+    const loadRecords = useCallback(async () => {
+        try {
+            const res = await API.get("medical-records/");
+            setRecords(res.data);
+        } catch {
+            setRecordError("Could not load medical records.");
+        }
+    }, []);
+
+    useEffect(() => {
+        if (activePanel === "records") loadRecords();
+    }, [activePanel, loadRecords]);
+
+    const handleUploadRecord = async (e) => {
+        e.preventDefault();
+        setRecordMessage("");
+        setRecordError("");
+        try {
+            const formData = new FormData();
+            formData.append("patient", recordForm.patient);
+            formData.append("title", recordForm.title);
+            if (recordForm.record_file) formData.append("record_file", recordForm.record_file);
+            await API.post("medical-records/", formData, { headers: { "Content-Type": "multipart/form-data" } });
+            setRecordMessage("Record uploaded.");
+            setRecordForm({ patient: "", title: "", record_file: null });
+            loadRecords();
+        } catch {
+            setRecordError("Could not upload record.");
+        }
+    };
 
     const resetForm = () => {
         setEditingAppointmentId(null);
@@ -236,57 +267,27 @@ function Appointment() {
 
             <main className="p-5 md:ml-64 md:p-8">
                 <div className="mx-auto max-w-7xl">
-                    <LiveDateTimeCard stageLabel="Stage 2 - Scheduling" />
+                    <LiveDateTimeCard stageLabel="Stage 2 - Appointment" />
 
-                    <section className="mt-6 grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
-                        <div className="space-y-6">
-                            <div className="rounded-[24px] border border-slate-800 bg-[#111827] p-5 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
-                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Modes</p>
-                                <div className="mt-5 space-y-3">
-                                    <button type="button" onClick={() => setActivePanel("book")} className={panelButtonClasses(activePanel === "book")}>
-                                        <p className="text-base font-semibold">Book Slot</p>
-                                        <p className="mt-1 text-sm text-slate-400">Create or edit one appointment at a time.</p>
-                                    </button>
-                                    <button type="button" onClick={() => setActivePanel("queue")} className={panelButtonClasses(activePanel === "queue")}>
-                                        <p className="text-base font-semibold">Queue Desk</p>
-                                        <p className="mt-1 text-sm text-slate-400">Check in and move patients through the queue.</p>
-                                    </button>
-                                    <button type="button" onClick={() => setActivePanel("manage")} className={panelButtonClasses(activePanel === "manage")}>
-                                        <p className="text-base font-semibold">Manage Schedule</p>
-                                        <p className="mt-1 text-sm text-slate-400">Filter, edit, and remove bookings.</p>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="rounded-[24px] border border-slate-800 bg-[#111827] p-5 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
-                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Live Queue</p>
-                                <div className="mt-5 space-y-3">
-                                    {appointments.slice(0, 5).map((appointment) => (
-                                        <div key={appointment.id} className="rounded-2xl border border-slate-800 bg-[#0f172a] p-4">
-                                            <div className="flex items-center justify-between gap-3">
-                                                <div>
-                                                    <p className="font-semibold text-white">{appointment.patient_name}</p>
-                                                    <p className="text-sm text-slate-400">
-                                                        {appointment.date} | {appointment.time_slot || "No slot"}
-                                                        {appointment.queue_position ? ` | Queue #${appointment.queue_position}` : ""}
-                                                    </p>
-                                                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
-                                                        {appointment.visit_stage || appointment.queue_status?.replaceAll("_", " ")}
-                                                        {appointment.estimated_wait_minutes !== null && appointment.estimated_wait_minutes !== undefined ? ` | ETA ${appointment.estimated_wait_minutes} min` : ""}
-                                                    </p>
-                                                </div>
-                                                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] ${getStatusTone(appointment.status)}`}>
-                                                    {appointment.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                    <section className="mt-6 rounded-[24px] border border-slate-800 bg-[#0f172a] p-5 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
+                        <div className="grid gap-3 md:grid-cols-3">
+                            <button type="button" onClick={() => setActivePanel("book")} className={`rounded-2xl border px-4 py-4 text-left transition ${activePanel === "book" ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "border-slate-800 bg-[#111827] text-slate-300 hover:border-slate-700 hover:bg-[#162033]"}`}>
+                                <p className="text-base font-semibold">Book Slot</p>
+                                <p className="mt-1 text-sm text-slate-400">Create or edit one appointment at a time.</p>
+                            </button>
+                            <button type="button" onClick={() => setActivePanel("queue")} className={`rounded-2xl border px-4 py-4 text-left transition ${activePanel === "queue" ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "border-slate-800 bg-[#111827] text-slate-300 hover:border-slate-700 hover:bg-[#162033]"}`}>
+                                <p className="text-base font-semibold">Queue Desk</p>
+                                <p className="mt-1 text-sm text-slate-400">Check in and move patients through the queue.</p>
+                            </button>
+                            <button type="button" onClick={() => setActivePanel("records")} className={`rounded-2xl border px-4 py-4 text-left transition ${activePanel === "records" ? "border-cyan-400/40 bg-cyan-400/10 text-white" : "border-slate-800 bg-[#111827] text-slate-300 hover:border-slate-700 hover:bg-[#162033]"}`}>
+                                <p className="text-base font-semibold">Recent Records</p>
+                                <p className="mt-1 text-sm text-slate-400">Upload and browse patient records.</p>
+                            </button>
                         </div>
+                    </section>
 
-                        <div className="space-y-6">
-                            {activePanel === "book" && (
+                    <div className="mt-6 space-y-6">
+                        {activePanel === "book" && (
                                 <form onSubmit={handleSubmit} className="rounded-[24px] border border-slate-800 bg-[#111827] p-6 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
                                     <div className="flex items-center justify-between gap-4">
                                         <div>
@@ -452,8 +453,76 @@ function Appointment() {
                                     </div>
                                 </div>
                             )}
+
+                            {activePanel === "records" && (
+                                <div className="grid gap-6 md:grid-cols-2">
+                                    <div className="rounded-[24px] border border-slate-800 bg-[#111827] p-5 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
+                                        <div>
+                                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Recent Records</p>
+                                            <h2 className="mt-2 text-2xl font-bold text-white">Uploads</h2>
+                                        </div>
+
+                                        <div className="mt-6 space-y-3">
+                                            {records.map((record) => (
+                                                <div key={record.id} className="rounded-2xl border border-slate-800 bg-[#0f172a] p-4">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <p className="text-base font-semibold text-white">{record.title}</p>
+                                                            <p className="mt-1 text-sm text-slate-400">{record.patient_name}</p>
+                                                            <p className="mt-1 text-sm text-slate-500">{record.uploaded_by_name || "Hospital staff"}</p>
+                                                        </div>
+                                                        {record.record_file ? (
+                                                            <a href={record.record_file} target="_blank" rel="noreferrer" className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500">Open</a>
+                                                        ) : (
+                                                            <span className="rounded-xl border border-slate-800 bg-[#111827] px-3 py-2 text-sm font-semibold text-slate-500">No file attached</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {!records.length && (
+                                                <div className="rounded-2xl border border-dashed border-slate-700 bg-[#0f172a] px-4 py-7 text-sm text-slate-400">No records yet.</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <form onSubmit={handleUploadRecord} className="rounded-[24px] border border-slate-800 bg-[#111827] p-5 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
+                                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Upload New Record</p>
+                                        <div className="mt-5 grid gap-4">
+                                            <select
+                                                className="w-full rounded-xl border border-white/10 bg-[#091a2b] px-4 py-3 text-white outline-none transition focus:border-slate-500 focus:bg-[#0d2235]"
+                                                value={recordForm.patient}
+                                                onChange={(e) => setRecordForm((current) => ({ ...current, patient: e.target.value }))}
+                                                required
+                                            >
+                                                <option value="">Select patient</option>
+                                                {patientOptions.map((item) => (
+                                                    <option key={item.value} value={item.value}>{item.label}</option>
+                                                ))}
+                                            </select>
+
+                                            <input
+                                                className="w-full rounded-xl border border-white/10 bg-[#091a2b] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-slate-500 focus:bg-[#0d2235]"
+                                                placeholder="Record title"
+                                                value={recordForm.title}
+                                                onChange={(e) => setRecordForm((current) => ({ ...current, title: e.target.value }))}
+                                                required
+                                            />
+
+                                            <input
+                                                className="w-full rounded-xl border border-white/10 bg-[#091a2b] px-4 py-3 text-sm text-slate-300 outline-none transition file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-slate-950"
+                                                type="file"
+                                                onChange={(e) => setRecordForm((current) => ({ ...current, record_file: e.target.files?.[0] || null }))}
+                                            />
+                                        </div>
+
+                                        {recordMessage && <p className="mt-4 rounded-xl border border-emerald-400/15 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">{recordMessage}</p>}
+                                        {recordError && <p className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{recordError}</p>}
+
+                                        <button type="submit" className="mt-5 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white">Upload Record</button>
+                                    </form>
+                                </div>
+                            )}
                         </div>
-                    </section>
                 </div>
             </main>
         </div>

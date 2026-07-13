@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Capacitor } from "@capacitor/core";
-import MobileApiSettings from "../components/MobileApiSettings";
 
 import API, {
     API_BASE_URL,
@@ -106,7 +104,6 @@ function Login() {
     const servicesRef = useRef(null);
     const supportRef = useRef(null);
     const navigate = useNavigate();
-    const isNativeApp = Capacitor.isNativePlatform();
 
     const scrollToRef = (targetRef) => {
         targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -146,18 +143,6 @@ function Login() {
         return [item.title, item.category, item.description].some((value) => value.toLowerCase().includes(query));
     });
 
-    const handleSaveApiUrl = () => {
-        setApiBaseUrl(apiBaseUrl);
-        setApiBaseUrlInput(getApiBaseUrl());
-        setError("");
-    };
-
-    const handleResetApiUrl = () => {
-        resetApiBaseUrl();
-        setApiBaseUrlInput(API_BASE_URL);
-        setError("");
-    };
-
     const openLoginModal = () => {
         setError("");
         setIsLoginModalOpen(true);
@@ -181,10 +166,6 @@ function Login() {
         event.preventDefault();
         setIsLoading(true);
         setError("");
-
-        if (isNativeApp) {
-            setApiBaseUrl(apiBaseUrl);
-        }
 
         try {
             const res = await API.post("login/", {
@@ -397,14 +378,6 @@ function Login() {
 
                         <form onSubmit={handleLogin} className="mt-8" autoComplete="off">
                             <div className="space-y-3">
-                                {isNativeApp && (
-                                    <MobileApiSettings
-                                        apiBaseUrl={apiBaseUrl}
-                                        onApiBaseUrlChange={setApiBaseUrlInput}
-                                        onSave={handleSaveApiUrl}
-                                        onReset={handleResetApiUrl}
-                                    />
-                                )}
 
                                 <input
                                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white"

@@ -12,4 +12,4 @@ admin.site.register(ActivityLog)
 admin.site.register(AccessToken)
 admin.site.register(PasswordResetOTP)
 admin.site.register(PatientSignupOTP)
-admin.site.register(FamilyAccess)
+

@@ -24,8 +24,6 @@ function DoctorAppointments() {
         notes: "",
     });
     const [patients, setPatients] = useState([]);
-    const [selectedPatientId, setSelectedPatientId] = useState("");
-    const [patientSearch, setPatientSearch] = useState("");
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
 
@@ -99,17 +97,6 @@ function DoctorAppointments() {
             label: `${app.patient_name} | ${app.date} ${app.time_slot || ""}`.trim(),
             patientId: String(app.patient),
         }));
-
-    const selectedPatient = patients.find((p) => String(p.id) === selectedPatientId);
-    const patientHistoryPrescriptions = selectedPatientId
-        ? prescriptions.filter((p) => String(p.patient) === selectedPatientId)
-        : [];
-    const patientHistoryAppointments = selectedPatientId
-        ? appointments.filter((a) => String(a.patient) === selectedPatientId)
-        : [];
-    const filteredPatients = patients.filter((p) =>
-        p.user_name.toLowerCase().includes(patientSearch.toLowerCase())
-    );
 
     return (
         <div className="dashboard-light min-h-screen bg-[#f6fbff]">
@@ -229,7 +216,12 @@ function DoctorAppointments() {
                             <div className="mt-4 max-h-[400px] space-y-3 overflow-y-auto">
                                 {prescriptions.map((item) => (
                                     <div key={item.id} className="rounded-2xl border border-slate-800 bg-[#0f172a] p-3 text-sm">
-                                        <p className="font-semibold text-white">{item.patient_name}</p>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="font-semibold text-white">{item.patient_name}</p>
+                                            <p className="text-[10px] text-slate-500">
+                                                {item.appointment_date ? `${item.appointment_date}` : ""}
+                                            </p>
+                                        </div>
                                         <p className="mt-0.5 text-slate-400">{item.diagnosis}</p>
                                         <p className="text-slate-500">{item.medicines}</p>
                                     </div>
@@ -240,79 +232,7 @@ function DoctorAppointments() {
                             </div>
                         </div>
 
-                        {/* Patient History */}
-                        <div className="rounded-[28px] border border-slate-800 bg-[#111827] p-6 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)] xl:col-span-2">
-                            <div className="flex items-center justify-between gap-4">
-                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Patient History</p>
-                                <div className="relative">
-                                    <input
-                                        className="w-64 rounded-xl border border-slate-700 bg-[#0f172a] px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-slate-500"
-                                        placeholder="Search patient..."
-                                        value={patientSearch}
-                                        onChange={(e) => { setPatientSearch(e.target.value); setSelectedPatientId(""); }}
-                                    />
-                                    {patientSearch && !selectedPatientId && (
-                                        <div className="absolute right-0 top-full z-10 mt-1 w-64 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-slate-700 bg-[#0f172a] p-2 shadow-xl">
-                                            {filteredPatients.map((patient) => (
-                                                <button
-                                                    key={patient.id}
-                                                    type="button"
-                                                    onClick={() => { setSelectedPatientId(String(patient.id)); setPatientSearch(patient.user_name); }}
-                                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-white transition hover:bg-slate-700"
-                                                >
-                                                    {patient.user_name}
-                                                </button>
-                                            ))}
-                                            {!filteredPatients.length && (
-                                                <p className="px-3 py-2 text-sm text-slate-400">No patients found.</p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
 
-                            {selectedPatient ? (
-                                <div className="mt-5 grid gap-5 lg:grid-cols-2">
-                                    <div>
-                                        <p className="mb-3 text-xs uppercase tracking-[0.22em] text-slate-500">Previous Prescriptions ({patientHistoryPrescriptions.length})</p>
-                                        <div className="max-h-[300px] space-y-3 overflow-y-auto">
-                                            {patientHistoryPrescriptions.map((item) => (
-                                                <div key={item.id} className="rounded-2xl border border-slate-800 bg-[#0f172a] p-3 text-sm">
-                                                    <p className="font-semibold text-white">
-                                                        {item.diagnosis} — {item.medicines}
-                                                    </p>
-                                                    <p className="mt-0.5 text-xs text-slate-500">
-                                                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}
-                                                    </p>
-                                                </div>
-                                            ))}
-                                            {!patientHistoryPrescriptions.length && (
-                                                <p className="text-sm text-slate-400">No previous prescriptions.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p className="mb-3 text-xs uppercase tracking-[0.22em] text-slate-500">Previous Appointments ({patientHistoryAppointments.length})</p>
-                                        <div className="max-h-[300px] space-y-3 overflow-y-auto">
-                                            {patientHistoryAppointments.map((item) => (
-                                                <div key={item.id} className="rounded-2xl border border-slate-800 bg-[#0f172a] p-3 text-sm">
-                                                    <p className="font-semibold text-white">{item.date} | {item.time_slot || "No slot"}</p>
-                                                    <p className="mt-0.5 text-slate-400">{item.reason || "No reason"}</p>
-                                                    <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.2em] ${getStatusTone(item.status)}`}>
-                                                        {item.status}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                            {!patientHistoryAppointments.length && (
-                                                <p className="text-sm text-slate-400">No previous appointments.</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="mt-5 text-sm text-slate-400">Select a patient above to view their history.</p>
-                            )}
-                        </div>
                     </div>
                 </div>
             </main>

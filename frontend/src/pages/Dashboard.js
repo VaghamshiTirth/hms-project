@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import API, { buildApiUrl } from "../services/api";
 import Sidebar from "../components/Sidebar";
-import API from "../services/api";
 
 const OVERVIEW_OPTIONS = [
     { key: "overview", label: "Overview" },
@@ -73,7 +73,29 @@ function Dashboard() {
     const [selectedBillId, setSelectedBillId] = useState(null);
     const [isBillingDetailOpen, setIsBillingDetailOpen] = useState(false);
     const [activeBillingGroup, setActiveBillingGroup] = useState("paid");
+    const [message, setMessage] = useState("");
     const navigate = useNavigate();
+    const userId = localStorage.getItem("userId");
+
+    const openInvoice = (billId) => {
+        window.open(buildApiUrl(`billing/${billId}/invoice/?user_id=${userId}`), "_blank", "noopener,noreferrer");
+    };
+
+    const markBillAsPaid = async (bill) => {
+        if (!bill || bill.status === "Paid") return;
+        try {
+            const res = await API.put(`billing/${bill.id}/`, { status: "Paid" });
+            setMessage(res.data.message || "Bill marked as paid.");
+            setSelectedBillId(null);
+            setIsBillingDetailOpen(false);
+            setTimeout(() => setMessage(""), 3000);
+            // Refresh billing data
+            const billingRes = await API.get("billing/");
+            setBilling(billingRes.data);
+        } catch (err) {
+            setError(err.response?.data?.error || "Could not update bill.");
+        }
+    };
 
     useEffect(() => {
         const role = localStorage.getItem("role");
@@ -119,7 +141,7 @@ function Dashboard() {
     const paidBills = scopedBilling.filter((item) => item.status === "Paid").length;
     const pendingBills = scopedBilling.filter((item) => item.status === "Pending").length;
     const visibleBilling = activeBillingGroup === "paid" ? paidBilling : pendingBilling;
-    const selectedBill = visibleBilling.find((item) => item.id === selectedBillId) || visibleBilling[0] || null;
+    const selectedBill = (selectedBillId != null ? visibleBilling.find((item) => String(item.id) === String(selectedBillId)) : null) || visibleBilling[0] || null;
 
     const doctorWorkload = doctors
         .map((doctor) => ({
@@ -138,6 +160,7 @@ function Dashboard() {
         { label: "Billing Total", value: `Rs. ${summary.billing_total}`, accent: "text-lime-300", bar: "from-lime-300 to-emerald-400" },
     ];
 
+    const visibleBillingIds = visibleBilling.map((b) => b.id).join(",");
     useEffect(() => {
         if (!visibleBilling.length) {
             setSelectedBillId(null);
@@ -145,10 +168,10 @@ function Dashboard() {
             return;
         }
 
-        if (!visibleBilling.some((item) => item.id === selectedBillId)) {
+        if (selectedBillId == null || !visibleBilling.some((item) => String(item.id) === String(selectedBillId))) {
             setSelectedBillId(visibleBilling[0].id);
         }
-    }, [visibleBilling, selectedBillId]);
+    }, [visibleBillingIds]);
 
     useEffect(() => {
         if (activeBillingGroup === "paid" && !paidBilling.length && pendingBilling.length) {
@@ -251,6 +274,7 @@ function Dashboard() {
                 )}
 
                 {error && <p className="mt-6 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>}
+                {message && <p className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{message}</p>}
 
                 <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     {cards.map((card) => (
@@ -455,6 +479,25 @@ function Dashboard() {
                         <div className="mt-4 rounded-2xl border border-slate-800 bg-[#111827] p-4">
                             <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Notes</p>
                             <p className="mt-2 text-base text-slate-200">{selectedBill.notes || "No notes added."}</p>
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-end gap-3">
+                            {selectedBill.status !== "Paid" && (
+                                <button
+                                    type="button"
+                                    onClick={() => markBillAsPaid(selectedBill)}
+                                    className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+                                >
+                                    Mark as Paid
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => openInvoice(selectedBill.id)}
+                                className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
+                            >
+                                Open Invoice
+                            </button>
                         </div>
                     </div>
                 </div>

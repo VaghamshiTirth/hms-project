@@ -69,6 +69,7 @@ class Billing(models.Model):
     appointment = models.ForeignKey('Appointment', on_delete=models.SET_NULL, blank=True, null=True)
     amount = models.FloatField()
     status = models.CharField(max_length=50)
+    payment_method = models.CharField(max_length=20, blank=True, default="Cash")
     invoice_number = models.CharField(max_length=40, unique=True, blank=True, null=True)
     notes = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(default=timezone.now)
@@ -149,29 +150,6 @@ class PatientSignupOTP(models.Model):
 
     def __str__(self):
         return f"Patient Signup OTP {self.mobile_number}"
-
-
-class FamilyAccess(models.Model):
-    RELATION_CHOICES = (
-        ("father", "Father"),
-        ("mother", "Mother"),
-        ("son", "Son"),
-        ("daughter", "Daughter"),
-        ("brother", "Brother"),
-        ("sister", "Sister"),
-        ("other", "Other"),
-    )
-
-    attendant_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="family_links")
-    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="attendant_links")
-    relation = models.CharField(max_length=50, choices=RELATION_CHOICES, blank=True, default="other")
-    created_at = models.DateTimeField(default=timezone.now)
-
-    class Meta:
-        unique_together = ("attendant_user", "patient")
-
-    def __str__(self):
-        return f"{self.attendant_user.name} -> {self.patient.user.name}"
 
 
 class Admission(models.Model):

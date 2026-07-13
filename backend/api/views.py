@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
-from django.db.models import Count, Q, Sum
+from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -19,7 +19,6 @@ from .models import (
     Appointment,
     Billing,
     Doctor,
-    FamilyAccess,
     MedicalRecord,
     PasswordResetOTP,
     Patient,
@@ -34,7 +33,6 @@ from .serializers import (
     AppointmentSerializer,
     BillingSerializer,
     DoctorSerializer,
-    FamilyAccessSerializer,
     MedicalRecordSerializer,
     PatientSerializer,
     PrescriptionSerializer,
@@ -87,17 +85,6 @@ def _generate_otp():
 
 def _build_placeholder_email(mobile_number):
     return f"patient.{mobile_number}@hospital.local"
-
-
-def _build_family_member_email():
-    return f"family.{secrets.token_hex(8)}@hospital.local"
-
-
-def _normalize_family_relation(raw_value):
-    value = str(raw_value or "").strip().lower()
-    if value in dict(FamilyAccess.RELATION_CHOICES):
-        return value
-    return "other"
 
 
 def _hospital_name():
@@ -388,7 +375,7 @@ def _admin_delete_blockers(user, current_user=None, doctor_profile=None, patient
 
     doctor_profile = doctor_profile or Doctor.objects.filter(user=user).first()
     patient_profile = patient_profile or Patient.objects.filter(user=user).first()
-    linked_patient_count = linked_patient_count if linked_patient_count is not None else FamilyAccess.objects.filter(attendant_user=user).count()
+    linked_patient_count = linked_patient_count if linked_patient_count is not None else 0
 
     if doctor_profile:
         if Appointment.objects.filter(doctor=doctor_profile, status__iexact="Pending").exists():
@@ -400,8 +387,7 @@ def _admin_delete_blockers(user, current_user=None, doctor_profile=None, patient
         if Billing.objects.filter(patient=patient_profile, status__iexact="Pending").exists():
             blockers.append("Patient ID has pending billing records.")
 
-    if user.role == "attendant" and linked_patient_count:
-        blockers.append("Attendant ID is linked to family access records.")
+    if user.role == "attendant" and linked_patient_count: blocked = None  # placeholder for future checks
 
     return blockers
 
@@ -416,7 +402,7 @@ def _serialize_admin_account(user, doctor_profiles=None, patient_profiles=None, 
     if patient_profile is None:
         patient_profile = Patient.objects.filter(user=user).first()
     if linked_patient_count is None:
-        linked_patient_count = FamilyAccess.objects.filter(attendant_user=user).count()
+        linked_patient_count = 0
 
     if user.role in {"patient", "attendant"}:
         login_identifier = user.mobile_number or user.email or f"User ID {user.id}"
@@ -494,9 +480,6 @@ def custom_login(request):
         payload["doctor_id"] = Doctor.objects.filter(user=user).values_list("id", flat=True).first()
     if user.role == "patient":
         payload["patient_id"] = _get_or_create_patient_profile(user).id
-    if user.role == "attendant":
-        payload["linked_patients"] = FamilyAccess.objects.filter(attendant_user=user).count()
-
     return Response(payload)
 
 
@@ -806,12 +789,7 @@ def admin_user_accounts(request):
         user_ids = [item.id for item in users]
         doctor_profiles = {item.user_id: item for item in Doctor.objects.filter(user_id__in=user_ids)}
         patient_profiles = {item.user_id: item for item in Patient.objects.filter(user_id__in=user_ids)}
-        linked_counts = {
-            item["attendant_user"]: item["total"]
-            for item in FamilyAccess.objects.filter(attendant_user_id__in=user_ids)
-            .values("attendant_user")
-            .annotate(total=Count("id"))
-        }
+        linked_counts = {}
         return Response(
             [
                 _serialize_admin_account(
@@ -1117,157 +1095,6 @@ def attendant_users(request):
     )
 
 
-@api_view(["GET", "POST"])
-def family_access(request):
-    current_user, error = _require_role(request, "frontdesk", "admin", "attendant", "patient")
-    if error:
-        return error
-
-    if request.method == "GET":
-        queryset = FamilyAccess.objects.select_related("attendant_user", "patient__user").order_by("-created_at")
-        if current_user.role == "attendant":
-            queryset = queryset.filter(attendant_user=current_user)
-        elif current_user.role == "patient":
-            queryset = queryset.filter(patient__user=current_user)
-        else:
-            attendant_user_id = request.query_params.get("attendant_user_id")
-            patient_id = request.query_params.get("patient_id")
-            if attendant_user_id:
-                queryset = queryset.filter(attendant_user_id=attendant_user_id)
-            if patient_id:
-                queryset = queryset.filter(patient_id=patient_id)
-        return Response(FamilyAccessSerializer(queryset, many=True).data)
-
-    if current_user.role == "patient":
-        patient = _get_or_create_patient_profile(current_user)
-        relation = _normalize_family_relation(request.data.get("relation"))
-        raw_mobile_number = request.data.get("mobile_number", "")
-        attendant_name = request.data.get("attendant_name", "").strip()
-        mobile_number = _normalize_mobile(raw_mobile_number)
-
-        if not mobile_number:
-            return _error("Please enter a valid 10-digit family mobile number.")
-
-        attendant_user = User.objects.filter(mobile_number=mobile_number).first()
-        generated_password = None
-        notification = None
-
-        if attendant_user:
-            if attendant_user.role != "attendant":
-                return _error("This mobile number is already used by another account.")
-        else:
-            if not attendant_name:
-                return _error("Please enter family member name.")
-
-            generated_password = _generate_password()
-            attendant_user = User.objects.create(
-                name=attendant_name,
-                email=_build_placeholder_email(mobile_number),
-                mobile_number=mobile_number,
-                password=make_password(generated_password),
-                role="attendant",
-            )
-            notification = _send_account_notification(attendant_user, generated_password)
-
-        if FamilyAccess.objects.filter(attendant_user=attendant_user, patient=patient).exists():
-            return _error("This family access already exists.")
-
-        link = FamilyAccess.objects.create(attendant_user=attendant_user, patient=patient, relation=relation)
-        _log_activity(current_user, "patient_create_family_access", "family_access", link.id, f"{current_user.name} -> {attendant_user.name}")
-        response_payload = {"message": "Family access granted.", "attendant_user_id": attendant_user.id}
-        if generated_password:
-            response_payload.update(
-                {
-                    "generated_password": generated_password,
-                    "mobile_number": mobile_number,
-                    "attendant_name": attendant_user.name,
-                    "notification": notification,
-                }
-            )
-        return Response(response_payload, status=status.HTTP_201_CREATED)
-
-    if current_user.role not in {"frontdesk", "admin"}:
-        return _error("Only staff can create family access.", status.HTTP_403_FORBIDDEN)
-
-    attendant_user = User.objects.filter(id=request.data.get("attendant_user"), role="attendant").first()
-    patient = Patient.objects.select_related("user").filter(id=request.data.get("patient")).first()
-    relation = _normalize_family_relation(request.data.get("relation"))
-    if not attendant_user:
-        return _error("Please choose a valid attendant user.")
-    if not patient:
-        return _error("Please choose a valid patient.")
-    if FamilyAccess.objects.filter(attendant_user=attendant_user, patient=patient).exists():
-        return _error("This family access already exists.")
-
-    link = FamilyAccess.objects.create(attendant_user=attendant_user, patient=patient, relation=relation)
-    _log_activity(current_user, "create_family_access", "family_access", link.id, f"{attendant_user.name} -> {patient.user.name}")
-    return Response({"message": "Family access linked."}, status=status.HTTP_201_CREATED)
-
-
-@api_view(["DELETE"])
-def family_access_detail(request, link_id):
-    current_user, error = _require_role(request, "frontdesk", "admin")
-    if error:
-        return error
-
-    link = FamilyAccess.objects.select_related("attendant_user", "patient__user").filter(id=link_id).first()
-    if not link:
-        return _error("Family access not found.", status.HTTP_404_NOT_FOUND)
-
-    link.delete()
-    _log_activity(current_user, "delete_family_access", "family_access", link_id, "")
-    return Response({"message": "Family access removed."})
-
-
-@api_view(["POST"])
-def attendant_family_members(request):
-    current_user, error = _require_role(request, "attendant", "frontdesk", "admin")
-    if error:
-        return error
-
-    attendant_user_id = request.data.get("attendant_user")
-    if current_user.role == "attendant":
-        attendant_user = current_user
-    else:
-        attendant_user = User.objects.filter(id=attendant_user_id, role="attendant").first()
-        if not attendant_user:
-            return _error("Please choose a valid attendant.")
-
-    name = request.data.get("name", "").strip()
-    age = request.data.get("age")
-    history = request.data.get("history", "").strip()
-    relation = _normalize_family_relation(request.data.get("relation", "other"))
-
-    if not name:
-        return _error("Please enter patient name.")
-    try:
-        age_value = int(age)
-    except (TypeError, ValueError):
-        return _error("Please enter a valid age.")
-    if age_value < 0:
-        return _error("Age must be zero or more.")
-    patient_user = User.objects.create(
-        name=name,
-        email=_build_family_member_email(),
-        mobile_number=None,
-        password=make_password(_generate_password()),
-        role="patient",
-    )
-    patient = Patient.objects.create(user=patient_user, age=age_value, history=history)
-    link = FamilyAccess.objects.create(attendant_user=attendant_user, patient=patient, relation=relation)
-    _log_activity(current_user, "create_family_member_patient", "patient", patient.id, f"{attendant_user.name} -> {name}")
-    return Response(
-        {
-            "message": "Family patient added under attendant account.",
-            "patient_id": patient.id,
-            "family_access_id": link.id,
-            "shared_mobile_number": attendant_user.mobile_number,
-            "uses_family_account": True,
-        },
-        status=status.HTTP_201_CREATED,
-    )
-
-
 @api_view(["GET"])
 def doctors(request):
     user, error = _require_role(request, "admin", "frontdesk", "doctor", "patient")
@@ -1287,7 +1114,7 @@ def doctors(request):
 
 @api_view(["GET"])
 def get_patients(request):
-    user, error = _require_role(request, "admin", "frontdesk")
+    user, error = _require_role(request, "admin", "frontdesk", "doctor")
     if error:
         return error
 
@@ -1381,6 +1208,28 @@ def patient_detail(request, patient_id):
     _log_activity(current_user, "delete_patient_profile", "patient", patient_id, linked_user_name)
     _log_activity(current_user, "delete_patient_user", "user", linked_user_id, linked_user_name)
     return Response({"message": "Patient permanently deleted."})
+
+
+@api_view(["GET"])
+def patient_full_history(request, patient_id):
+    current_user, error = _require_role(request, "admin", "frontdesk", "doctor")
+    if error:
+        return error
+
+    patient = Patient.objects.select_related("user").filter(id=patient_id).first()
+    if not patient:
+        return _error("Patient not found.", status.HTTP_404_NOT_FOUND)
+
+    appointments = Appointment.objects.select_related("doctor__user").filter(patient=patient).order_by("-date", "-time_slot")
+    prescriptions = Prescription.objects.select_related("doctor__user", "appointment").filter(patient=patient).order_by("-created_at")
+    medical_records = MedicalRecord.objects.select_related("uploaded_by").filter(patient=patient).order_by("-created_at")
+
+    return Response({
+        "patient": PatientSerializer(patient).data,
+        "appointments": AppointmentSerializer(appointments, many=True).data,
+        "prescriptions": PrescriptionSerializer(prescriptions, many=True).data,
+        "medical_records": MedicalRecordSerializer(medical_records, many=True).data,
+    })
 
 
 @api_view(["GET"])
@@ -1656,10 +1505,13 @@ def billing(request):
         else:
             patient_user_id = request.query_params.get("patient_user_id")
             status_filter = request.query_params.get("status")
+            payment_method_filter = request.query_params.get("payment_method")
             if patient_user_id:
                 queryset = queryset.filter(patient__user_id=patient_user_id)
             if status_filter:
                 queryset = queryset.filter(status=status_filter)
+            if payment_method_filter:
+                queryset = queryset.filter(payment_method=payment_method_filter)
 
         return Response(BillingSerializer(queryset, many=True).data)
 
@@ -1756,6 +1608,7 @@ def billing_invoice(request, bill_id):
     mobile_number = html.escape(bill.patient.user.mobile_number or "-")
     status_text = html.escape(bill.status)
     issued_at = html.escape(bill.created_at.strftime('%Y-%m-%d %H:%M'))
+    payment_method = html.escape(bill.payment_method or "-")
     notes_html = ""
     if bill.notes and bill.notes.strip():
         notes_html = f"""
@@ -1935,6 +1788,10 @@ def billing_invoice(request, bill_id):
                             <div class="row">
                                 <span class="label">Date</span>
                                 <span class="value">{issued_at}</span>
+                            </div>
+                            <div class="row">
+                                <span class="label">Payment Method</span>
+                                <span class="value">{payment_method}</span>
                             </div>
                             {notes_html}
                         </div>
@@ -2210,7 +2067,7 @@ def doctor_dashboard(request):
 
     appointments_queryset = Appointment.objects.select_related("patient__user", "doctor__user").filter(doctor=doctor).order_by("-date", "-time_slot")
     patients_queryset = Patient.objects.select_related("user").filter(appointment__doctor=doctor).distinct().order_by("user__name")
-    prescriptions_queryset = Prescription.objects.select_related("patient__user", "doctor__user").filter(doctor=doctor).order_by("-created_at")[:10]
+    prescriptions_queryset = Prescription.objects.select_related("patient__user", "doctor__user", "appointment").filter(doctor=doctor).order_by("-created_at")[:10]
     admissions_queryset = Admission.objects.select_related("patient__user", "doctor__user", "appointment", "created_by", "updated_by").filter(doctor=doctor).order_by("-admitted_at", "-id")
 
     return Response(
@@ -2234,7 +2091,7 @@ def patient_dashboard(request):
 
     appointments_queryset = Appointment.objects.select_related("doctor__user", "patient__user").filter(patient=patient).order_by("-date", "-time_slot")
     billing_queryset = Billing.objects.select_related("patient__user").filter(patient=patient).order_by("-created_at", "-id")
-    prescriptions_queryset = Prescription.objects.select_related("doctor__user", "patient__user").filter(patient=patient).order_by("-created_at")
+    prescriptions_queryset = Prescription.objects.select_related("doctor__user", "patient__user", "appointment").filter(patient=patient).order_by("-created_at")
     records_queryset = MedicalRecord.objects.select_related("patient__user", "uploaded_by").filter(patient=patient).order_by("-created_at")
 
     return Response(
@@ -2244,42 +2101,6 @@ def patient_dashboard(request):
             "billing": BillingSerializer(billing_queryset, many=True).data,
             "prescriptions": PrescriptionSerializer(prescriptions_queryset, many=True).data,
             "medical_records": MedicalRecordSerializer(records_queryset, many=True).data,
-            "family_links": FamilyAccessSerializer(
-                FamilyAccess.objects.select_related("attendant_user", "patient__user").filter(patient=patient).order_by("-created_at"),
-                many=True,
-            ).data,
-        }
-    )
-
-
-@api_view(["GET"])
-def attendant_dashboard(request):
-    user, error = _require_role(request, "attendant")
-    if error:
-        return error
-
-    links = FamilyAccess.objects.select_related("patient__user").filter(attendant_user=user).order_by("patient__user__name")
-    patient_ids = list(links.values_list("patient_id", flat=True))
-    patients = Patient.objects.select_related("user").filter(id__in=patient_ids).order_by("user__name")
-    appointments = Appointment.objects.select_related("doctor__user", "patient__user").filter(patient_id__in=patient_ids).order_by("-date", "-time_slot")
-    billing_entries = Billing.objects.select_related("patient__user", "appointment").filter(patient_id__in=patient_ids).order_by("-created_at", "-id")
-    prescriptions = Prescription.objects.select_related("doctor__user", "patient__user", "appointment").filter(patient_id__in=patient_ids).order_by("-created_at")
-    records = MedicalRecord.objects.select_related("patient__user", "uploaded_by").filter(patient_id__in=patient_ids).order_by("-created_at")
-
-    return Response(
-        {
-            "attendant": {
-                "id": user.id,
-                "name": user.name,
-                "mobile_number": user.mobile_number,
-                "email": user.email,
-            },
-            "links": FamilyAccessSerializer(links, many=True).data,
-            "patients": PatientSerializer(patients, many=True).data,
-            "appointments": AppointmentSerializer(appointments, many=True).data,
-            "billing": BillingSerializer(billing_entries, many=True).data,
-            "prescriptions": PrescriptionSerializer(prescriptions[:20], many=True).data,
-            "medical_records": MedicalRecordSerializer(records[:20], many=True).data,
         }
     )
 

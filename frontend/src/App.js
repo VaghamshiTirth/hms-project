@@ -11,10 +11,10 @@ import PatientDashboard from "./pages/PatientDashboard";
 import ForgotPassword from "./pages/ForgotPassword";
 import ActivityLogs from "./pages/ActivityLogs";
 import PatientSignup from "./pages/PatientSignup";
-import AttendantDashboard from "./pages/AttendantDashboard";
 import AdminIdManager from "./pages/AdminIdManager";
 import DoctorAppointments from "./pages/DoctorAppointments";
 import DoctorAdmissions from "./pages/DoctorAdmissions";
+import PatientHistory from "./pages/PatientHistory";
 
 function App() {
   return (
@@ -36,7 +36,7 @@ function App() {
         <Route path="/doctor-appointments" element={<DoctorAppointments />} />
         <Route path="/doctor-admissions" element={<DoctorAdmissions />} />
         <Route path="/patient-dashboard" element={<PatientDashboard />} />
-        <Route path="/attendant-dashboard" element={<AttendantDashboard />} />
+        <Route path="/patient-history" element={<PatientHistory />} />
         <Route path="*" element={<Navigate replace to="/" />} />
       </Routes>
     </BrowserRouter>

@@ -1,10 +1,8 @@
 import axios from "axios";
-import { Capacitor } from "@capacitor/core";
 
 const ensureTrailingSlash = (url) => (url.endsWith("/") ? url : `${url}/`);
 const API_URL_STORAGE_KEY = "apiBaseUrl";
 
-const isNativeApp = Capacitor.isNativePlatform();
 const browserHost =
     typeof window !== "undefined" && window.location?.hostname
         ? window.location.hostname
@@ -15,12 +13,8 @@ const webHost = browserHost === "localhost" ? "127.0.0.1" : browserHost;
 const webApiUrl = isLocalBrowser
     ? "http://127.0.0.1:8000/api/"
     : `http://${webHost}:8000/api/`;
-const nativeApiUrl =
-    process.env.REACT_APP_NATIVE_API_URL ||
-    envWebApiUrl ||
-    "http://10.0.2.2:8000/api/";
 
-const defaultApiBaseUrl = ensureTrailingSlash(isNativeApp ? nativeApiUrl : webApiUrl);
+const defaultApiBaseUrl = ensureTrailingSlash(webApiUrl);
 
 export const getApiBaseUrl = () => {
     if (typeof window === "undefined") {
@@ -88,7 +82,6 @@ export const getHomeRoute = (role) => {
     if (role === "frontdesk") return "/frontdesk-dashboard";
     if (role === "doctor") return "/doctor-dashboard";
     if (role === "patient") return "/patient-dashboard";
-    if (role === "attendant") return "/attendant-dashboard";
     return "/";
 };
 

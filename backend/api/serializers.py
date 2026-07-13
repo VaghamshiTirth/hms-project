@@ -108,6 +108,8 @@ class BillingSerializer(serializers.ModelSerializer):
 class PrescriptionSerializer(serializers.ModelSerializer):
     doctor_name = serializers.CharField(source="doctor.user.name", read_only=True)
     patient_name = serializers.CharField(source="patient.user.name", read_only=True)
+    appointment_date = serializers.CharField(source="appointment.date", read_only=True, allow_null=True)
+    appointment_time_slot = serializers.CharField(source="appointment.time_slot", read_only=True, allow_null=True)
 
     class Meta:
         model = Prescription
@@ -130,17 +132,6 @@ class ActivityLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ActivityLog
-        fields = '__all__'
-
-
-class FamilyAccessSerializer(serializers.ModelSerializer):
-    attendant_name = serializers.CharField(source="attendant_user.name", read_only=True)
-    attendant_mobile = serializers.CharField(source="attendant_user.mobile_number", read_only=True)
-    patient_name = serializers.CharField(source="patient.user.name", read_only=True)
-    patient_mobile = serializers.CharField(source="patient.user.mobile_number", read_only=True)
-
-    class Meta:
-        model = FamilyAccess
         fields = '__all__'
 
 

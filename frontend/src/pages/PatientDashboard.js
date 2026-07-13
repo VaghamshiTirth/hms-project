@@ -27,7 +27,6 @@ function PatientDashboard() {
     const [credentialInfo, setCredentialInfo] = useState(null);
     const [profileForm, setProfileForm] = useState({ age: "", history: "" });
     const [bookingForm, setBookingForm] = useState({ doctor: "", date: "", time_slot: "", reason: "", pre_checkin_notes: "" });
-    const [familyForm, setFamilyForm] = useState({ attendant_name: "", mobile_number: "", relation: "other" });
     const [isBooking, setIsBooking] = useState(false);
     const [isLoadingSlots, setIsLoadingSlots] = useState(false);
     const [activePortalSection, setActivePortalSection] = useState("appointments");
@@ -60,27 +59,6 @@ function PatientDashboard() {
         }
     };
 
-    const handleGrantFamilyAccess = async (event) => {
-        event.preventDefault();
-        setMessage("");
-        setError("");
-        setCredentialInfo(null);
-        try {
-            const response = await API.post("family-access/", familyForm);
-            setMessage(response.data.message || "Family access granted.");
-            if (response.data.generated_password) {
-                setCredentialInfo({
-                    name: response.data.attendant_name || familyForm.attendant_name,
-                    mobile_number: response.data.mobile_number || familyForm.mobile_number,
-                    generated_password: response.data.generated_password,
-                });
-            }
-            setFamilyForm({ attendant_name: "", mobile_number: "", relation: "other" });
-            loadDashboard();
-        } catch (err) {
-            setError(err.response?.data?.error || "Could not grant family access.");
-        }
-    };
 
     const loadAvailableSlots = async (doctorId, dateValue, preferredTime = "") => {
         if (!doctorId || !dateValue) {
@@ -213,7 +191,6 @@ function PatientDashboard() {
         .sort((left, right) => `${left.date} ${left.time_slot || "00:00"}`.localeCompare(`${right.date} ${right.time_slot || "00:00"}`))[0];
     const prescriptions = dashboard.prescriptions || [];
     const medicalRecords = dashboard.medical_records || [];
-    const familyLinks = dashboard.family_links || [];
     const cards = [
         { label: "Age", value: dashboard.patient.age },
         { label: "Appointments", value: dashboard.appointments.length },
@@ -223,7 +200,6 @@ function PatientDashboard() {
     ];
     const portalSections = [
         { key: "appointments", title: "Appointments", detail: "Visits and self-booking." },
-        { key: "family", title: "Family Access", detail: "Share with guardian." },
         { key: "profile", title: "Profile", detail: "Update and review your details." },
         { key: "billing", title: "Billing", detail: "Bills and invoice access." },
         { key: "prescriptions", title: "Prescriptions", detail: "Doctor instructions." },
@@ -402,64 +378,6 @@ function PatientDashboard() {
                 </section>
                 )}
 
-                {activePortalSection === "family" && (
-                <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-                    <form onSubmit={handleGrantFamilyAccess} className="rounded-[30px] border border-slate-800 bg-[#111827] p-6 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Family Access</p>
-                                <h3 className="mt-2 text-2xl font-bold text-white">Share with guardian</h3>
-                            </div>
-                            <span className="rounded-full border border-cyan-300/15 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">Post signup</span>
-                        </div>
-                        <div className="mt-6 grid gap-4">
-                            <input className="w-full rounded-xl border border-white/10 bg-[#0f172a] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-slate-500" placeholder="Family member name" value={familyForm.attendant_name} onChange={(e) => setFamilyForm((current) => ({ ...current, attendant_name: e.target.value }))} />
-                            <input className="w-full rounded-xl border border-white/10 bg-[#0f172a] px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-slate-500" placeholder="Family mobile number" value={familyForm.mobile_number} onChange={(e) => setFamilyForm((current) => ({ ...current, mobile_number: e.target.value }))} required />
-                            <select className="w-full rounded-xl border border-white/10 bg-[#0f172a] px-4 py-3 text-white outline-none transition focus:border-slate-500" value={familyForm.relation} onChange={(e) => setFamilyForm((current) => ({ ...current, relation: e.target.value }))}>
-                                <option value="other">Other</option>
-                                <option value="father">Father</option>
-                                <option value="mother">Mother</option>
-                                <option value="son">Son</option>
-                                <option value="daughter">Daughter</option>
-                                <option value="brother">Brother</option>
-                                <option value="sister">Sister</option>
-                            </select>
-                        </div>
-                        {credentialInfo?.generated_password && (
-                            <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-4 text-sm text-cyan-100">
-                                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100/80">New Family Login</p>
-                                <p className="mt-3">Name: {credentialInfo.name}</p>
-                                <p className="mt-1">Mobile: {credentialInfo.mobile_number}</p>
-                                <p className="mt-1 font-semibold">Temporary Password: {credentialInfo.generated_password}</p>
-                            </div>
-                        )}
-                        <div className="mt-6 flex items-center justify-between gap-4">
-                            <p className="text-sm text-slate-400">Patient registration ke baad bhi family/guardian access add kar sakte ho.</p>
-                            <button type="submit" className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white">Grant Access</button>
-                        </div>
-                    </form>
-                    <div className="rounded-[30px] border border-slate-800 bg-[#111827] p-6 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Shared Access</p>
-                                <h3 className="mt-2 text-2xl font-bold text-white">Linked family members</h3>
-                            </div>
-                            <span className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-slate-200">{familyLinks.length} linked</span>
-                        </div>
-                        <div className="mt-6 space-y-3">
-                            {familyLinks.map((link) => (
-                                <div key={link.id} className="rounded-3xl border border-slate-800 bg-[#0f172a] p-4">
-                                    <p className="text-base font-semibold text-white">{link.attendant_name}</p>
-                                    <p className="mt-1 text-sm text-slate-400">{link.attendant_mobile || "No mobile"}</p>
-                                    <p className="mt-2 text-sm text-slate-500">Relation: {link.relation || "Family access"}</p>
-                                </div>
-                            ))}
-                            {!familyLinks.length && <div className="rounded-3xl border border-dashed border-slate-700 bg-[#0f172a] px-4 py-8 text-sm text-slate-400">No family access linked yet.</div>}
-                        </div>
-                    </div>
-                </section>
-                )}
-
                 {activePortalSection === "profile" && (
                 <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
                     <form onSubmit={handleProfileUpdate} className="rounded-[30px] border border-slate-800 bg-[#111827] p-6 shadow-[0_24px_50px_-36px_rgba(15,23,42,0.55)]">
@@ -537,11 +455,19 @@ function PatientDashboard() {
                     <div className="mt-6 space-y-3">
                         {prescriptions.map((item) => (
                             <div key={item.id} className="rounded-3xl border border-slate-800 bg-[#0f172a] p-4">
-                                <p className="text-base font-semibold text-white">{item.doctor_name}</p>
-                                <p className="mt-1 text-sm text-slate-400">{item.diagnosis}</p>
-                                <p className="mt-2 text-sm text-slate-500">{item.medicines}</p>
-                                <p className="mt-2 text-sm text-slate-500">{item.notes || "No notes"}</p>
-                                <p className="mt-2 text-sm text-slate-400">Follow-up: {item.follow_up_date || "Not set"}</p>
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-base font-semibold text-white">{item.doctor_name}</p>
+                                    <p className="text-xs text-slate-500">
+                                        {item.appointment_date ? `Visit: ${item.appointment_date} ${item.appointment_time_slot || ""}` : ""}
+                                    </p>
+                                </div>
+                                <p className="mt-2 text-sm text-slate-400">{item.diagnosis}</p>
+                                <p className="mt-1 text-sm text-slate-500">{item.medicines}</p>
+                                {item.notes && <p className="mt-1 text-sm text-slate-500">{item.notes}</p>}
+                                <div className="mt-2 flex items-center gap-4 text-xs text-slate-400">
+                                    {item.follow_up_date && <span>Follow-up: {item.follow_up_date}</span>}
+                                    <span>Prescribed: {item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</span>
+                                </div>
                             </div>
                         ))}
                         {!prescriptions.length && <div className="rounded-3xl border border-dashed border-slate-700 bg-[#0f172a] px-4 py-8 text-sm text-slate-400">No prescriptions yet.</div>}

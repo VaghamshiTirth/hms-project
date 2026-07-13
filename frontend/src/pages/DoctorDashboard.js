@@ -104,7 +104,7 @@ function DoctorDashboard() {
     const completedAppointments = appointments.filter((appointment) => appointment.status === "Completed").length;
     const pendingAppointments = appointments.filter((appointment) => appointment.queue_status === "waiting" && appointment.status !== "Completed" && !appointment.is_no_show).length;
     const doctorEmail = dashboard.doctor.user_email || dashboard.doctor.user_mobile || "No contact available";
-    const nextAppointment = activeAppointments[0] || appointments[0];
+    const nextAppointment = activeAppointments.length > 0 ? activeAppointments[0] : null;
 
     const metricCards = [
         { label: "Pending Appointment", value: pendingAppointments, accent: "from-amber-400/20 via-amber-300/8 to-transparent", badge: "border-amber-300/20 bg-amber-300/10 text-amber-200" },
@@ -131,14 +131,16 @@ function DoctorDashboard() {
                                 <p className="mt-1 text-sm text-slate-400">{doctorEmail}</p>
                             </div>
 
-                            <div className="flex items-center">
-                                <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-white">
-                                    <p className="text-xs uppercase tracking-[0.26em] text-slate-400">Next Visit</p>
-                                    <p className="mt-3 text-lg font-bold">
-                                        {nextAppointment ? `${nextAppointment.patient_name} on ${nextAppointment.date}` : "No visit assigned"}
-                                    </p>
+                            {nextAppointment && (
+                                <div className="flex items-center">
+                                    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-white">
+                                        <p className="text-xs uppercase tracking-[0.26em] text-slate-400">Next Visit</p>
+                                        <p className="mt-3 text-lg font-bold">
+                                            {nextAppointment.patient_name} on {nextAppointment.date}
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
 
