@@ -62,7 +62,12 @@ def get_default_allowed_hosts():
     return sorted(hosts)
 
 
-ALLOWED_HOSTS = get_list_env("DJANGO_ALLOWED_HOSTS", get_default_allowed_hosts())
+ALLOWED_HOSTS = [
+    "hms-backend-2z7m.onrender.com",
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+]
 CSRF_TRUSTED_ORIGINS = get_list_env("DJANGO_CSRF_TRUSTED_ORIGINS", [])
 
 
