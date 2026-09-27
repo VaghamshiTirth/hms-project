@@ -3,10 +3,17 @@ backend/.venv/
 backend/**/__pycache__/
 backend/*.pyc
 backend/db.sqlite3
+backend/db.sqlite3.*
 
 # Django media/logs
 backend/media/
 backend/sms_outbox.log
+
+# Logs
+*.log
+
+# Backups
+*.bak
 
 # Node
 frontend/node_modules/
