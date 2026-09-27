@@ -11,8 +11,8 @@ const isLocalBrowser = ["localhost", "127.0.0.1"].includes(browserHost);
 const envWebApiUrl = process.env.REACT_APP_API_URL;
 const webHost = browserHost === "localhost" ? "127.0.0.1" : browserHost;
 const webApiUrl = isLocalBrowser
-    ? "http://127.0.0.1:8000/api/"
-    : `http://${webHost}:8000/api/`;
+  ? "http://127.0.0.1:8000/api/"
+  : "https://hms-backend-2z7m.onrender.com/api/";
 
 const defaultApiBaseUrl = ensureTrailingSlash(webApiUrl);
 
